@@ -5,6 +5,10 @@ from fairseq.models import transformer, register_model, register_model_architect
 
 @register_model('conquest')
 class ConquestModel(transformer.TransformerModel):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.encoder.requires_grad_(False)
+
     @classmethod
     def build_decoder(cls, args, tgt_dict, embed_tokens):
         return ConquestDecoder(
@@ -64,9 +68,10 @@ class ConquestDecoder(transformer.TransformerDecoder):
         padding = prev_output_tokens.eq(self.dictionary.pad())
         if padding.any():
             padding = padding.view(batch_size, tgt_lengths, 1).repeat(1, 1, dim)
-            r2l = torch.masked_fill(r2l, padding, 0)
+            r2l = torch.masked_fill(r2l, padding, 0.0)
 
         l2r[:, :-2] += r2l[:, 2:]
+        l2r[:, :-2] /= 2
         return l2r[:, :-1], {}
 
 

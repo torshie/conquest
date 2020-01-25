@@ -4,13 +4,14 @@ import fairseq.tasks.translation
 import fairseq.data.data_utils
 
 
-def collate(values, pad_idx, eos_idx):
+def collate_prev_output(values, pad_idx, eos_idx):
     size = max(v.size(0) for v in values)
     size += 1
     res = values[0].new(len(values), size).fill_(pad_idx)
     for i, v in enumerate(values):
         res[i][0] = eos_idx
-        res[i][1:len(v)+1].copy_(v)
+        res[i][1:len(v)].copy_(v[:-1])
+        res[i][len(v)] = eos_idx
     return res
 
 
@@ -57,9 +58,11 @@ class ConquestDataset(fairseq.data.FairseqDataset):
         tgt_tokens = [x['target'] for x in samples]
         src_tokens = fairseq.data.data_utils.collate_tokens(src_tokens,
             pad_idx=self.pad_idx, eos_idx=self.eos_idx)
-        src_lengths = torch.LongTensor([s['source'].numel() for s in samples])
-        tgt_tokens = collate(tgt_tokens, pad_idx=self.pad_idx,
+        target = fairseq.data.data_utils.collate_tokens(tgt_tokens,
+            pad_idx=self.pad_idx, eos_idx=self.eos_idx)
+        prev_output = collate_prev_output(tgt_tokens, pad_idx=self.pad_idx,
             eos_idx=self.eos_idx)
+        src_lengths = torch.LongTensor([s['source'].numel() for s in samples])
         ntokens = sum(len(s['target']) for s in samples)
 
         return {
@@ -69,9 +72,9 @@ class ConquestDataset(fairseq.data.FairseqDataset):
             'net_input': {
                 'src_tokens': src_tokens,
                 'src_lengths': src_lengths,
-                'prev_output_tokens': tgt_tokens,
+                'prev_output_tokens': prev_output,
             },
-            'target': tgt_tokens[:, 1:],
+            'target': target,
         }
 
     def num_tokens(self, idx):
